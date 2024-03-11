@@ -55,7 +55,6 @@ def extract_frames_from_video(video_path, save_dir):
 
 
 if __name__ == "__main__":
-    start_process = default_timer()
     # load config
     opt = DINetInferenceOptions().parse_args()
     if not os.path.exists(opt.source_video_path):
@@ -64,6 +63,23 @@ if __name__ == "__main__":
         raise ValueError(
             "wrong openface stats path : {}".format(opt.source_openface_landmark_path)
         )
+    
+    # load pretrained model weight
+    logging.info("loading pretrained model from: %s", opt.pretrained_clip_DINet_path)
+    model = DINet(opt.source_channel, opt.ref_channel, opt.audio_channel).cuda()
+    if not os.path.exists(opt.pretrained_clip_DINet_path):
+        raise ValueError(
+            "wrong path of pretrained model weight: %s", opt.pretrained_clip_DINet_path
+        )
+    state_dict = torch.load(opt.pretrained_clip_DINet_path)["state_dict"]["net_g"]
+    new_state_dict = OrderedDict()
+    for k, v in state_dict.items():
+        name = k[7:]  # remove module.
+        new_state_dict[name] = v
+    model.load_state_dict(new_state_dict)
+    model.eval()
+
+    start_process = default_timer()
 
     # extract frames from source video
     logging.info("extracting frames from video: %s", opt.source_video_path)
@@ -184,21 +200,6 @@ if __name__ == "__main__":
     ref_img_tensor = (
         torch.from_numpy(ref_video_frame).permute(2, 0, 1).unsqueeze(0).float().cuda()
     )
-
-    # load pretrained model weight
-    logging.info("loading pretrained model from: %s", opt.pretrained_clip_DINet_path)
-    model = DINet(opt.source_channel, opt.ref_channel, opt.audio_channel).cuda()
-    if not os.path.exists(opt.pretrained_clip_DINet_path):
-        raise ValueError(
-            "wrong path of pretrained model weight: %s", opt.pretrained_clip_DINet_path
-        )
-    state_dict = torch.load(opt.pretrained_clip_DINet_path)["state_dict"]["net_g"]
-    new_state_dict = OrderedDict()
-    for k, v in state_dict.items():
-        name = k[7:]  # remove module.
-        new_state_dict[name] = v
-    model.load_state_dict(new_state_dict)
-    model.eval()
 
     ############################################## inference frame by frame ##############################################
     logging.info("generating result video")
